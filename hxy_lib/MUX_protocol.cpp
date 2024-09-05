@@ -203,7 +203,83 @@ void MUX_protocol::online_MUX(const uint32_t batch_size, const uint8_t *choice, 
 #endif
 }
 
+//void MUX_protocol::MUX(const uint32_t batch_size, const uint8_t *choice, const uint64_t *x, const uint64_t *y, uint64_t *res, const uint32_t output_bw) {
+//    // 1-out-of-2 ROT based
+//    IO->sync();
+//    auto before_online_MUX_comm = IO->counter;
+//    auto before_online_MUX_time = high_resolution_clock::now();
+//
+//    const uint64_t MOD_MASK = (output_bw == 64 ? -1ULL : (1ULL << output_bw) - 1);
+//
+//    vector<uint8_t> send_masked_index(batch_size), recv_masked_index(batch_size);
+//    vector<uint64_t> send_OT_msg(batch_size * 2), recv_OT_msg(batch_size * 2);
+//
+//    PRG prg;
+//    prg.random_data(res, batch_size * sizeof(uint64_t));
+//
+//    for (uint32_t i = 0; i < batch_size; i++) {
+//        send_masked_index[i] = choice[i] ^ rot_choice[i + MUX_used];
+//    }
+//
+//    if (party == hxy::SERVER_ID) {
+//        send_bool_vct((bool *)send_masked_index.data(), batch_size, IO);
+//        recv_bool_vct((bool *)recv_masked_index.data(), batch_size, IO);
+//    } else {
+//        recv_bool_vct((bool *)recv_masked_index.data(), batch_size, IO);
+//        send_bool_vct((bool *)send_masked_index.data(), batch_size, IO);
+//    }
+//
+//    auto send_OT_ptr = send_OT_msg.data();
+//    for (uint32_t i = 0; i < batch_size; i++) {
+//        if (recv_masked_index[i]) std::swap(rot_msg0[i + MUX_used], rot_msg1[i + MUX_used]);
+//        send_OT_ptr[0] = send_OT_ptr[1] = -res[i];
+//        (choice[i] ? send_OT_ptr[1] : send_OT_ptr[0]) += x[i] - y[i];
+//        send_OT_ptr[0] += rot_msg0[i + MUX_used];
+//        send_OT_ptr[1] += rot_msg1[i + MUX_used];
+//        send_OT_ptr += 2;
+//    }
+//    elementwise_and_inplace(2 * batch_size, send_OT_msg.data(), MOD_MASK);
+//
+//    if (output_bw <= 8) {
+//        vector<uint8_t> send_OT_msg_8(batch_size * 2), recv_OT_msg_8(batch_size * 2);
+//
+//        elementwise_copy(batch_size * 2, send_OT_msg.data(), send_OT_msg_8.data());
+//
+//        if (party == hxy::SERVER_ID) {
+//            send_uint8_vct(send_OT_msg_8.data(), 2 * batch_size, output_bw, IO);
+//            recv_uint8_vct(recv_OT_msg_8.data(), 2 * batch_size, output_bw, IO);
+//        } else {
+//            recv_uint8_vct(recv_OT_msg_8.data(), 2 * batch_size, output_bw, IO);
+//            send_uint8_vct(send_OT_msg_8.data(), 2 * batch_size, output_bw, IO);
+//        }
+//
+//        for (uint32_t i = 0; i < batch_size * 2; i++)
+//            recv_OT_msg[i] = recv_OT_msg_8[i];
+//    } else {
+//        if (party == hxy::SERVER_ID) {
+//            send_u64_vct(send_OT_msg.data(), 2 * batch_size, output_bw, IO);
+//            recv_u64_vct(recv_OT_msg.data(), 2 * batch_size, output_bw, IO);
+//        } else {
+//            recv_u64_vct(recv_OT_msg.data(), 2 * batch_size, output_bw, IO);
+//            send_u64_vct(send_OT_msg.data(), 2 * batch_size, output_bw, IO);
+//        }
+//    }
+//    auto recv_OT_ptr = recv_OT_msg.data();
+//    for (uint32_t i = 0; i < batch_size; i++) {
+//        res[i] += ((choice[i] ? recv_OT_ptr[1] : recv_OT_ptr[0]) - rot_recv_msg[i + MUX_used] + y[i]);
+//        recv_OT_ptr += 2;
+//    }
+//    elementwise_and_inplace(batch_size, res, MOD_MASK);
+//
+//    MUX_used += batch_size;
+//
+//    auto after_online_MUX_comm = IO->counter;
+//    IO->sync();
+//    auto after_online_MUX_time = high_resolution_clock::now();
+//}
+
 void MUX_protocol::MUX(const uint32_t batch_size, const uint8_t *choice, const uint64_t *x, const uint64_t *y, uint64_t *res, const uint32_t output_bw) {
+    // COT based
     IO->sync();
     auto before_online_MUX_comm = IO->counter;
     auto before_online_MUX_time = high_resolution_clock::now();
@@ -211,14 +287,14 @@ void MUX_protocol::MUX(const uint32_t batch_size, const uint8_t *choice, const u
     const uint64_t MOD_MASK = (output_bw == 64 ? -1ULL : (1ULL << output_bw) - 1);
 
     vector<uint8_t> send_masked_index(batch_size), recv_masked_index(batch_size);
-    vector<uint64_t> send_OT_msg(batch_size * 2), recv_OT_msg(batch_size * 2);
+    vector<uint64_t> send_OT_msg(batch_size, 0), recv_OT_msg(batch_size);
 
     PRG prg;
-    prg.random_data(res, batch_size * sizeof(uint64_t));
 
-    for (uint32_t i = 0; i < batch_size; i++) {
-        send_masked_index[i] = choice[i] ^ rot_choice[i + MUX_used];
-    }
+    elementwise_xor(batch_size, choice, rot_choice.data() + MUX_used, send_masked_index.data());
+//    for (uint32_t i = 0; i < batch_size; i++) { 
+//        send_masked_index[i] = choice[i] ^ rot_choice[i + MUX_used];
+//    }
 
     if (party == hxy::SERVER_ID) {
         send_bool_vct((bool *)send_masked_index.data(), batch_size, IO);
@@ -228,47 +304,51 @@ void MUX_protocol::MUX(const uint32_t batch_size, const uint8_t *choice, const u
         send_bool_vct((bool *)send_masked_index.data(), batch_size, IO);
     }
 
-    auto send_OT_ptr = send_OT_msg.data();
+    elementwise_sub_inplace(batch_size, send_OT_msg.data(), rot_msg0.data() + MUX_used);
+    elementwise_sub_inplace(batch_size, send_OT_msg.data(), rot_msg1.data() + MUX_used);
     for (uint32_t i = 0; i < batch_size; i++) {
         if (recv_masked_index[i]) std::swap(rot_msg0[i + MUX_used], rot_msg1[i + MUX_used]);
-        send_OT_ptr[0] = send_OT_ptr[1] = -res[i];
-        (choice[i] ? send_OT_ptr[1] : send_OT_ptr[0]) += x[i] - y[i];
-        send_OT_ptr[0] += rot_msg0[i + MUX_used];
-        send_OT_ptr[1] += rot_msg1[i + MUX_used];
-        send_OT_ptr += 2;
+        res[i] = rot_msg0[i + MUX_used];
+        uint64_t delta = y[i] - x[i];
+        if (choice[i] == 0) {
+            send_OT_msg[i] += delta;
+            res[i] += x[i];
+        } else {
+            send_OT_msg[i] -= delta;
+            res[i] += y[i];
+        }
     }
-    elementwise_and_inplace(2 * batch_size, send_OT_msg.data(), MOD_MASK);
+    elementwise_and_inplace(batch_size, send_OT_msg.data(), MOD_MASK);
 
     if (output_bw <= 8) {
-        vector<uint8_t> send_OT_msg_8(batch_size * 2), recv_OT_msg_8(batch_size * 2);
+        vector<uint8_t> send_OT_msg_8(batch_size), recv_OT_msg_8(batch_size);
 
-        elementwise_copy(batch_size * 2, send_OT_msg.data(), send_OT_msg_8.data());
-//        for (uint32_t i = 0; i < batch_size * 2; i++)
-//            send_OT_msg_8[i] = send_OT_msg[i];
+        elementwise_copy(batch_size, send_OT_msg.data(), send_OT_msg_8.data());
 
         if (party == hxy::SERVER_ID) {
-            send_uint8_vct(send_OT_msg_8.data(), 2 * batch_size, output_bw, IO);
-            recv_uint8_vct(recv_OT_msg_8.data(), 2 * batch_size, output_bw, IO);
+            send_uint8_vct(send_OT_msg_8.data(), batch_size, output_bw, IO);
+            recv_uint8_vct(recv_OT_msg_8.data(), batch_size, output_bw, IO);
         } else {
-            recv_uint8_vct(recv_OT_msg_8.data(), 2 * batch_size, output_bw, IO);
-            send_uint8_vct(send_OT_msg_8.data(), 2 * batch_size, output_bw, IO);
+            recv_uint8_vct(recv_OT_msg_8.data(), batch_size, output_bw, IO);
+            send_uint8_vct(send_OT_msg_8.data(), batch_size, output_bw, IO);
         }
 
-        for (uint32_t i = 0; i < batch_size * 2; i++)
-            recv_OT_msg[i] = recv_OT_msg_8[i];
+        elementwise_copy(batch_size, recv_OT_msg.data(), recv_OT_msg_8.data());
     } else {
         if (party == hxy::SERVER_ID) {
-            send_u64_vct(send_OT_msg.data(), 2 * batch_size, output_bw, IO);
-            recv_u64_vct(recv_OT_msg.data(), 2 * batch_size, output_bw, IO);
+            send_u64_vct(send_OT_msg.data(), batch_size, output_bw, IO);
+            recv_u64_vct(recv_OT_msg.data(), batch_size, output_bw, IO);
         } else {
-            recv_u64_vct(recv_OT_msg.data(), 2 * batch_size, output_bw, IO);
-            send_u64_vct(send_OT_msg.data(), 2 * batch_size, output_bw, IO);
+            recv_u64_vct(recv_OT_msg.data(), batch_size, output_bw, IO);
+            send_u64_vct(send_OT_msg.data(), batch_size, output_bw, IO);
         }
     }
-    auto recv_OT_ptr = recv_OT_msg.data();
     for (uint32_t i = 0; i < batch_size; i++) {
-        res[i] += ((choice[i] ? recv_OT_ptr[1] : recv_OT_ptr[0]) - rot_recv_msg[i + MUX_used] + y[i]);
-        recv_OT_ptr += 2;
+        if (choice[i] == 0) {
+            res[i] -= rot_recv_msg[i + MUX_used];
+        } else {
+            res[i] += recv_OT_msg[i] + rot_recv_msg[i + MUX_used];
+        }
     }
     elementwise_and_inplace(batch_size, res, MOD_MASK);
 
@@ -280,6 +360,7 @@ void MUX_protocol::MUX(const uint32_t batch_size, const uint8_t *choice, const u
 }
 
 void MUX_protocol::_fake_MUX(const uint32_t batch_size, const uint8_t *choice, const uint64_t *x, uint64_t *res, const uint32_t output_bw) {
+    if (party == hxy::SERVER_ID) cout << "fake MUX" << endl;
     const uint64_t MOD_MASK = (output_bw == 64 ? -1ULL : (1ULL << output_bw) - 1);
     if (party == hxy::SERVER_ID) { // SERVER
         vector<uint8_t> choice_bit0(batch_size);
@@ -304,6 +385,7 @@ void MUX_protocol::_fake_MUX(const uint32_t batch_size, const uint8_t *choice, c
 }
 
 void MUX_protocol::_fake_MUX(const uint32_t batch_size, const uint8_t *choice, const uint64_t *x, const uint64_t *y, uint64_t *res, const uint32_t output_bw) {
+    if (party == hxy::SERVER_ID) cout << "fake MUX" << endl;
     const uint64_t MOD_MASK = (output_bw == 64 ? -1ULL : (1ULL << output_bw) - 1);
     if (party == hxy::SERVER_ID) {
         vector<uint8_t> choice_bit0(batch_size);

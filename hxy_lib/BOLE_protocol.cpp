@@ -9,6 +9,9 @@ BOLE_protocol::BOLE_protocol(uint32_t _party_id, NetIO * _IO, const uint32_t _bo
     parms0 = make_shared<EncryptionParameters>(scheme_type::bfv);
     parms1 = make_shared<EncryptionParameters>(scheme_type::bfv);
 
+    parms0->set_n_special_primes(0);
+    parms1->set_n_special_primes(0);
+
     parms0->set_poly_modulus_degree(POLYNOMIAL_DEGREE);
     parms1->set_poly_modulus_degree(POLYNOMIAL_DEGREE);
 
@@ -229,21 +232,21 @@ void BOLE_protocol::BOLE_online(const uint32_t N, const uint32_t bw, const uint6
 
             cur += POLYNOMIAL_DEGREE;
         }
-//        cout << "encoded" << endl;
+        cout << "encoded" << endl;
 
         encrypt_then_send(*context0, plain_x0, *encryptor0, *IO);
         encrypt_then_send(*context1, plain_x1, *encryptor1, *IO);
         encrypt_then_send(*context0, plain_y0, *encryptor0, *IO);
         encrypt_then_send(*context1, plain_y1, *encryptor1, *IO);
-//        cout << "send ciphers over" << endl;
+        cout << "send ciphers over" << endl;
 
         vector<Ciphertext> cipher_z0(cipher_num), cipher_z1(cipher_num);
 
         recv_ciphertext(*context0, cipher_z0, *IO);
         recv_ciphertext(*context1, cipher_z1, *IO);
-//        cout << "recv ciphers over" << endl;
+        cout << "recv ciphers over" << endl;
 
-//        cout << "noise budget = " << get_noise_budget(*decryptor0, cipher_z0) << " " << get_noise_budget(*decryptor1, cipher_z1) << endl;
+        cout << "noise budget = " << get_noise_budget(*decryptor0, cipher_z0) << " " << get_noise_budget(*decryptor1, cipher_z1) << endl;
 
         vector<Plaintext> plain_z0(cipher_num), plain_z1(cipher_num);
         vector<uint64_t> z0(POLYNOMIAL_DEGREE), z1(POLYNOMIAL_DEGREE);
@@ -285,7 +288,7 @@ void BOLE_protocol::BOLE_online(const uint32_t N, const uint32_t bw, const uint6
 
             cur += POLYNOMIAL_DEGREE;
         }
-//        cout << "encoded" << endl;
+        cout << "encoded" << endl;
 
         vector<Ciphertext> cipher_x0(cipher_num), cipher_x1(cipher_num);
         vector<Ciphertext> cipher_y0(cipher_num), cipher_y1(cipher_num);
@@ -294,7 +297,7 @@ void BOLE_protocol::BOLE_online(const uint32_t N, const uint32_t bw, const uint6
         recv_cipher_then_expand(*context1, cipher_x1, *IO);
         recv_cipher_then_expand(*context0, cipher_y0, *IO);
         recv_cipher_then_expand(*context1, cipher_y1, *IO);
-//        cout << "recv ciphers over" << endl;
+        cout << "recv ciphers over" << endl;
 
         for (uint32_t i = 0; i < cipher_num; i++) {
             evaluator0->multiply_plain_inplace(cipher_x0[i], plain_y0[i]); // x_S * y_C
@@ -313,7 +316,7 @@ void BOLE_protocol::BOLE_online(const uint32_t N, const uint32_t bw, const uint6
         }
         send_ciphertext(cipher_z0, *IO);
         send_ciphertext(cipher_z1, *IO);
-//        cout << "send ciphers over" << endl;
+        cout << "send ciphers over" << endl;
     }
     uint64_t after_comm = IO->counter;
     IO->sync();
@@ -324,10 +327,10 @@ void BOLE_protocol::BOLE_online(const uint32_t N, const uint32_t bw, const uint6
         IO->recv_data(&client_comm, sizeof(uint64_t));
         uint64_t online_comm = client_comm + server_comm;
         uint64_t online_time = duration_cast<microseconds>(after_time - before_time).count() / 1000; // ms
-//        cout << "online BOLE batch size = " << N << endl;
-//        cout << "online BOLE time = " << (double) online_time << "ms" << endl;
-//        cout << "online BOLE ALL communication = " << (double) online_comm / 1024.0 / 1024.0 << "MB" << endl;
-//        cout << "average BOLE comm = " << (double) online_comm / N << "Byte" << endl;
+        cout << "online BOLE batch size = " << N << endl;
+        cout << "online BOLE time = " << (double) online_time << "ms" << endl;
+        cout << "online BOLE ALL communication = " << (double) online_comm / 1024.0 / 1024.0 << "MB" << endl;
+        cout << "average BOLE comm = " << (double) online_comm / N << " bytes" << endl;
     } else {
         client_comm = after_comm - before_comm;
         IO->send_data(&client_comm, sizeof(uint64_t));

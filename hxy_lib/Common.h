@@ -278,12 +278,26 @@ inline void elementwise_mulmod(const uint32_t len, const T * __restrict a, const
 }
 
 template<typename T>
+inline void elementwise_sub(const uint32_t len, const T * __restrict a, const T * __restrict b, T * __restrict c) {
+    for (uint32_t i = 0; i < len; i++) {
+        c[i] = (a[i] - b[i]);
+    }
+}
+
+
+template<typename T>
 inline void elementwise_submod(const uint32_t len, const T * __restrict a, const T * __restrict b, T * __restrict c, const T MOD_MASK) {
     for (uint32_t i = 0; i < len; i++) {
         c[i] = (a[i] - b[i]) & MOD_MASK;
     }
 }
 
+template<typename T>
+inline void elementwise_sub_inplace(const uint32_t len, T * __restrict a, const T * __restrict b) {
+    for (uint32_t i = 0; i < len; i++) {
+        a[i] = (a[i] - b[i]);
+    }
+}
 
 template<typename T>
 inline void elementwise_submod_inplace(const uint32_t len, T * __restrict a, const T b, const T MOD_MASK) {

@@ -248,7 +248,7 @@ void recv_cipher_then_expand(const SEALContext &context, Ciphertext & ciphertext
     vector<uint8_t> recv_data(N * coeff_sum_bytes + seed_size);
     IO.recv_data(recv_data.data(), N * coeff_sum_bytes + seed_size);
 
-    ciphertext.resize(context, first_parms.parms_id(), 2);
+    ciphertext.resize(context, context.first_context_data()->parms_id(), 2);
     auto cipher_ptr = ciphertext.data();
     auto recv_data_ptr = recv_data.data();
     for (uint32_t i = 0; i < coeff_mod_count; i++) {
@@ -266,80 +266,37 @@ void recv_cipher_then_expand(const SEALContext &context, Ciphertext & ciphertext
     auto prng = prng_info.make_prng();
     seal::util::sample_poly_uniform(prng, first_parms, ciphertext.data(1));
 }
-
 void encrypt_then_send(const SEALContext & context, const vector<Plaintext> & plaintext_vct, Encryptor & encryptor, NetIO & IO) {
     uint32_t vct_size = plaintext_vct.size();
     IO.send_data(&vct_size, sizeof(uint32_t));
-    EncryptionParameters first_parms = context.first_context_data()->parms();
-    auto N = first_parms.poly_modulus_degree();
-    auto coeff_mod_count = first_parms.coeff_modulus().size();
-    auto coeff_mod = first_parms.coeff_modulus();
-    vector<uint32_t> coeff_mod_byte_count(coeff_mod_count);
-    uint32_t coeff_sum_bytes = 0;
-    for (uint32_t i = 0; i < coeff_mod_count; i++) {
-        uint32_t tmp = ceil(log2(coeff_mod[i].value()) / 8.0);
-        coeff_sum_bytes += tmp;
-        coeff_mod_byte_count[i] = tmp;
-    }
-    const uint32_t seed_size = 64;
-    vector<uint8_t> send_data(vct_size * (N * coeff_sum_bytes + seed_size));
-    auto send_data_ptr = send_data.data();
     for (uint32_t i = 0; i < vct_size; i++) {
         Serializable<Ciphertext> send_cipher = encryptor.encrypt_symmetric(plaintext_vct[i]);
-        auto cipher_ptr = ((Ciphertext*) &send_cipher)->data();
-        for (uint32_t j = 0; j < coeff_mod_count; j++) {
-            for (uint32_t k = 0; k < N; k++) {
-                memcpy(send_data_ptr, cipher_ptr, coeff_mod_byte_count[j]);
-                send_data_ptr += coeff_mod_byte_count[j];
-                cipher_ptr++;
-            }
-        }
-        uint8_t * prng_seed_ptr = (uint8_t *)((Ciphertext*) &send_cipher)->data(1);
-        memcpy(send_data_ptr, prng_seed_ptr + 8 + 16 + 1, seed_size);
-        send_data_ptr += seed_size;
+        std::stringstream os;
+        uint32_t ct_size;
+        send_cipher.save(os);
+        ct_size = os.tellp();
+        std::string ct_ser = os.str();
+        IO.send_data(&ct_size, sizeof(uint32_t));
+        IO.send_data(ct_ser.c_str(), ct_ser.size());
     }
-    IO.send_data(send_data.data(), vct_size * (N * coeff_sum_bytes + seed_size));
 }
 
 void recv_cipher_then_expand(const SEALContext &context, vector<Ciphertext> & ciphertext_vct, NetIO & IO) {
     uint32_t vct_size;
     IO.recv_data(&vct_size, sizeof(uint32_t));
     ciphertext_vct.resize(vct_size);
-
-    EncryptionParameters first_parms = context.first_context_data()->parms();
-    auto N = first_parms.poly_modulus_degree();
-    auto coeff_mod_count = first_parms.coeff_modulus().size();
-    auto coeff_mod = first_parms.coeff_modulus();
-    vector<uint32_t> coeff_mod_byte_count(coeff_mod_count);
-    uint32_t coeff_sum_bytes = 0;
-    for (uint32_t i = 0; i < coeff_mod_count; i++) {
-        uint32_t tmp = ceil(log2(coeff_mod[i].value()) / 8.0);
-        coeff_sum_bytes += tmp;
-        coeff_mod_byte_count[i] = tmp;
-    }
-    const uint32_t seed_size = 64;
-    vector<uint8_t> recv_data(vct_size * (N * coeff_sum_bytes + seed_size));
-    IO.recv_data(recv_data.data(), vct_size * (N * coeff_sum_bytes + seed_size));
-
-    auto recv_data_ptr = recv_data.data();
-    for (uint32_t i = 0; i < vct_size; i++) {
-        ciphertext_vct[i].resize(context, context.first_parms_id(), 2);
-        auto cipher_ptr = ciphertext_vct[i].data();
-        for (uint32_t j = 0; j < coeff_mod_count; j++) {
-            for (uint32_t k = 0; k < N; k++) {
-                uint64_t tmp = 0;
-                memcpy(&tmp, recv_data_ptr, coeff_mod_byte_count[j]);
-                *cipher_ptr = tmp;
-                recv_data_ptr += coeff_mod_byte_count[j];
-                cipher_ptr++;
-            }
+    for (size_t i = 0; i < vct_size; ++i) {
+        std::stringstream is;
+        uint32_t ct_size;
+        IO.recv_data(&ct_size, sizeof(uint32_t));
+        char *c_enc_result = new char[ct_size];
+        IO.recv_data(c_enc_result, ct_size);
+        is.write(c_enc_result, ct_size);
+        ciphertext_vct[i].unsafe_load(context, is);
+        if (!seal::is_valid_for(ciphertext_vct[i], context)) {
+            cerr << "load ciphertext error" << endl;
         }
-        UniformRandomGeneratorInfo prng_info;
-        prng_info.type_ = prng_type::blake2xb;
-        memcpy(prng_info.seed_.data(), recv_data_ptr, seed_size);
-        recv_data_ptr += seed_size;
-        auto prng = prng_info.make_prng();
-        seal::util::sample_poly_uniform(prng, first_parms, ciphertext_vct[i].data(1));
+        delete[] c_enc_result;
     }
 }
 

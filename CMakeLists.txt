@@ -1,22 +1,33 @@
 cmake_minimum_required(VERSION 3.16)
 project(gpt2_restart_2024)
+include(CMakeFindDependencyMacro)
 
-find_package(SEAL 4.1.1 EXACT REQUIRED)
-find_package(Eigen3 REQUIRED)
-find_package(emp-tool REQUIRED)
-find_package(emp-ot REQUIRED)
-
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -mavx2 -msse4.1 -maes -msse2 -march=native -fopenmp")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+## Dependencies
+find_package(Threads REQUIRED)
+find_package(OpenSSL REQUIRED)
+find_package(Eigen3 REQUIRED)
+find_package(SEAL 3.7.2 EXACT REQUIRED)
+
+find_package(emp-tool REQUIRED
+             PATHS ${CMAKE_BINARY_DIR}/cmake
+             NO_DEFAULT_PATH)
+
+find_package(emp-ot REQUIRED
+             PATHS ${CMAKE_BINARY_DIR}/cmake
+             NO_DEFAULT_PATH)
+
+include_directories(${EIGEN3_INCLUDE_DIR}
+                    ${EMP-OT_INCLUDE_DIRS} 
+                    ${EMP-TOOL_INCLUDE_DIRS})
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -mavx2 -msse4.1 -maes -msse2 -march=native -fopenmp")
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/hxy_lib)
-
-# General test
-add_executable(test test.cpp hxy_lib/Common.cpp)
-target_link_libraries(test ${EMP-TOOL_LIBRARIES} SEAL::seal)
 
 # Common function
 add_executable(Common_test test/Common_test.cpp hxy_lib/Common.cpp)

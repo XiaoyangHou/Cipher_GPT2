@@ -8,6 +8,7 @@
 //#define CHECK
 
 namespace hxy {
+    const uint32_t thread_number = 8; // T power of 2
     const uint64_t bit_width = 37;
     const uint64_t MOD = (1ULL << bit_width);
     const uint64_t MOD_MASK = MOD - 1;

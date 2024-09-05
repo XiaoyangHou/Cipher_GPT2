@@ -15,7 +15,7 @@ private:
     shared_ptr<SEALContext> context0{nullptr}, context1{nullptr};
     shared_ptr<PublicKey> publicKey0{nullptr}, publicKey1{nullptr};
     shared_ptr<seal::UniformRandomGenerator> seal_uniform_random_generator{nullptr};
-    const vector<int> moduli_bits{52, 52, 52};
+    const vector<int> moduli_bits{60, 49};
     shared_ptr<Evaluator> evaluator0{nullptr}, evaluator1{nullptr};
     shared_ptr<BatchEncoder> encoder0{nullptr}, encoder1{nullptr};
     shared_ptr<Decryptor> decryptor0{nullptr}, decryptor1{nullptr};

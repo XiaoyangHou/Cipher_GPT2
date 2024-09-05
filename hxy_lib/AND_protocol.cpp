@@ -157,6 +157,7 @@ void AND_protocol::AND(const uint32_t dim, const uint8_t * u, const uint8_t * v,
 }
 
 void AND_protocol::_fake_AND(const uint32_t dim, const uint8_t * u, const uint8_t * v, uint8_t * z) {
+    if (party == hxy::SERVER_ID) cout << "fake AND" << endl;
     if (party == hxy::SERVER_ID) {
         vector<uint8_t> u0(dim), v0(dim), z0(dim);
         recv_bool_vct((bool *)u0.data(), dim, IO);
